@@ -1,20 +1,66 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🛡️ MindShield
 
-# Run and deploy your AI Studio app
+**Private, AI-Powered Mental Health Support**
 
-This contains everything you need to run your app locally.
+MindShield is a privacy-first, text-based AI mental health assistant designed to provide compassionate emotional support, reflection, and grounding techniques without storing personal data.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1KFnJtZTlzfQULgdZ2Iosjs9_oVdtKWg-
+## 🌟 Mission
 
-## Run Locally
+Many individuals experience emotional distress but avoid seeking help due to stigma, fear of judgment, or lack of accessible resources. MindShield aims to bridge this gap by offering a safe, anonymous space to feel heard and grounded.
 
-**Prerequisites:**  Node.js
+**Core Philosophy:** Help the user feel heard, grounded, and supported — not fixed.
 
+## ✨ Key Features
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### 1. 💬 Text-Based Emotional Support
+*   **Natural Conversation:** Uses advanced AI to provide calm, empathetic, and non-judgmental responses.
+*   **Privacy-First:** No login required. No chat history is stored on servers. Once the session ends, the data is gone.
+*   **Model:** Powered by `gemini-2.5-flash-lite-latest` for fast, responsive interaction.
+
+### 2. 🧠 Deep Reflection Mode
+*   **Advanced Reasoning:** Users can request a "Deep Reflection" where the AI analyzes the conversation context to identify underlying emotions and patterns.
+*   **Thinking Capability:** Utilizes `gemini-3-pro-preview` with a dedicated **Thinking Budget** to generate profound, personalized insights rather than generic advice.
+
+### 3. 🌬️ Grounding Tools
+*   **Interactive Breathing Exercise:** A built-in "Box Breathing" tool (4-4-4-4 technique) to help users physically calm their nervous system during moments of high anxiety.
+*   **Visual Guidance:** soothing animations to guide the breathing rhythm.
+
+### 4. 🚨 Distress Detection & Safety
+*   **Guardrails:** The AI is trained to detect signs of self-harm or extreme distress.
+*   **Crisis Handling:** Responds with empathy and encourages real-world professional help without being alarmist.
+*   **Disclaimer:** MindShield clearly states it is not a replacement for professional therapy or medical treatment.
+
+## 🛠️ Technical Architecture
+
+MindShield is built as a lightweight, responsive web application.
+
+*   **Frontend:** React 19, Tailwind CSS, Lucide React Icons.
+*   **AI Integration:** Google Gemini API (`@google/genai` SDK).
+*   **State Management:** React Hooks (Session-based, non-persistent).
+
+### AI Models Used
+
+| Feature | Model | Reasoning |
+| :--- | :--- | :--- |
+| **Main Chat** | `gemini-2.5-flash-lite-latest` | Fast latency, cost-effective, excellent natural language handling. |
+| **Deep Reflection** | `gemini-3-pro-preview` | High reasoning capability. Configured with `thinkingConfig` to allow "thought" before answering complex emotional queries. |
+
+## 🚀 Getting Started
+
+1.  **API Key:** This application requires a Google Gemini API Key.
+2.  **Environment:** The API key is accessed via `process.env.API_KEY`.
+3.  **Run:**
+    *   Ensure dependencies are installed (`react`, `react-dom`, `@google/genai`, `lucide-react`, `react-markdown`).
+    *   Mount the app to the root element.
+
+## 🔒 Privacy & Ethics
+
+*   **No Database:** We do not maintain a database of user conversations.
+*   **Client-Side Only:** State exists only within the user's browser session.
+*   **Transparent Limits:** The UI clearly communicates that this is an AI tool, not a human therapist.
+
+## ⚠️ Important Disclaimer
+
+MindShield is an AI-powered tool for emotional support and self-reflection. **It is not a medical device and does not provide clinical diagnoses or medical advice.**
+
+If you or someone you know is in immediate danger, please contact your local emergency services or a crisis hotline immediately.
