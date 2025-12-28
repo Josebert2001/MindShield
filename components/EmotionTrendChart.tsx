@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Message } from '../types';
 import { emotionColors } from '../utils/emotionParser';
-import { TrendingUp, Activity, Lightbulb } from 'lucide-react';
+import { TrendingUp, Activity, Lightbulb, Zap, Check } from 'lucide-react';
+import { generateCopingStrategy } from '../services/geminiService';
 
 interface EmotionTrendChartProps {
   messages: Message[];
@@ -9,6 +10,9 @@ interface EmotionTrendChartProps {
 }
 
 const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose }) => {
+  const [strategy, setStrategy] = useState<string | null>(null);
+  const [loadingStrategy, setLoadingStrategy] = useState(false);
+
   // Filter only model messages that have emotion data
   const dataPoints = messages
     .filter(m => m.role === 'model' && m.emotionData)
@@ -66,6 +70,26 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
   };
 
   const insightText = generateInsight(avgIntensity);
+
+  const handleGenerateStrategy = async () => {
+    if (loadingStrategy) return;
+    setLoadingStrategy(true);
+    
+    // Format history for AI context
+    const history = dataPoints
+        .slice(-5) // Take last 5 points for relevance
+        .map(d => `${d.emotion} (Intensity: ${d.intensity})`)
+        .join(' -> ');
+        
+    try {
+        const result = await generateCopingStrategy(history);
+        setStrategy(result);
+    } catch (e) {
+        console.error("Strategy gen failed", e);
+    } finally {
+        setLoadingStrategy(false);
+    }
+  };
 
   return (
     <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-xl shadow-blue-500/5 animate-in slide-in-from-bottom-4">
@@ -149,7 +173,7 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
         </div>
 
         {/* AI Insight Overlay */}
-        {dataPoints.length >= 3 && (
+        {dataPoints.length >= 3 && !strategy && (
             <div className="mt-4 bg-blue-50/50 rounded-lg p-3 flex items-start gap-3 border border-blue-100">
                 <Lightbulb size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 <p className="text-xs text-blue-800 font-medium leading-relaxed">
@@ -157,6 +181,45 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
                 </p>
             </div>
         )}
+
+        {/* Coping Strategy Section */}
+        <div className="mt-6 pt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                    <Zap size={16} className="text-amber-500" />
+                    Suggested Strategy
+                </h4>
+            </div>
+
+            {strategy ? (
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 animate-in fade-in zoom-in-95">
+                    <p className="text-sm text-amber-900 leading-relaxed font-medium">
+                        "{strategy}"
+                    </p>
+                    <button
+                        onClick={() => setStrategy(null)}
+                        className="mt-3 text-[10px] text-amber-600 hover:text-amber-800 font-semibold uppercase tracking-wide flex items-center gap-1"
+                    >
+                        <Check size={12} /> Mark as done
+                    </button>
+                </div>
+            ) : (
+                <button
+                    onClick={handleGenerateStrategy}
+                    disabled={loadingStrategy}
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium shadow-md hover:shadow-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                    {loadingStrategy ? (
+                        <>
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>Generating...</span>
+                        </>
+                    ) : (
+                        <>✨ Generate Personalized Strategy</>
+                    )}
+                </button>
+            )}
+        </div>
 
         {/* Summary */}
         <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-xs">

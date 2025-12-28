@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock, Globe } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock, Globe, Mic, MicOff } from 'lucide-react';
 import { Message } from '../types';
 import { sendMessageToGemini, generateDeepReflection, initChatSession } from '../services/geminiService';
 import { parseEmotionMetadata, cleanAIText } from '../utils/emotionParser';
 import EmotionTrendChart from './EmotionTrendChart';
+import EmotionTimeline from './EmotionTimeline';
 import Logo from './Logo';
 import ReactMarkdown from 'react-markdown';
 
@@ -19,14 +20,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
   const [isReflecting, setIsReflecting] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [supportsSpeech, setSupportsSpeech] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     // Init session on mount
     initChatSession();
     
+    // Check for SpeechRecognition support
+    if (typeof window !== 'undefined') {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            setSupportsSpeech(true);
+        }
+    }
+
     // Add welcome message
     setMessages([
       {
@@ -59,8 +71,62 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const toggleListening = () => {
+    if (isListening) {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+        return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript;
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        
+        if (finalTranscript) {
+            setInputText(prev => {
+                const needsSpace = prev.length > 0 && !prev.endsWith(' ');
+                return prev + (needsSpace ? ' ' : '') + finalTranscript;
+            });
+        }
+    };
+
+    recognition.onerror = (event: any) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+    };
+
+    recognition.onend = () => {
+        setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
+
+    if (isListening) {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -152,7 +218,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
   return (
     <div className="flex flex-col h-screen bg-slate-50 relative">
       {/* Header */}
-      <header className="bg-white border-b border-slate-100 p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+      <header className="bg-white border-b border-slate-100 p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm z-20">
         <div className="flex items-center space-x-2.5">
           <div className="bg-slate-900 text-white p-1.5 rounded-lg flex items-center justify-center">
              <Logo className="w-5 h-5" variant="white" />
@@ -208,75 +274,86 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
       {/* Main Content Area - Split for Insights */}
       <div className="flex-1 overflow-hidden relative flex flex-col sm:flex-row">
           
-          {/* Messages Area */}
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-hide">
-            {messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div 
-                  className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 shadow-sm text-sm sm:text-base leading-relaxed ${
-                    msg.role === 'user' 
-                      ? 'bg-blue-600 text-white rounded-br-none' 
-                      : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
-                  } ${msg.isThinking ? 'border-l-4 border-l-purple-400 bg-purple-50' : ''}`}
-                >
-                  <ReactMarkdown 
-                    className={`markdown ${msg.role === 'user' ? 'prose-invert' : 'prose-slate'}`}
-                    components={{
-                        p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />
-                    }}
-                  >
-                    {msg.text}
-                  </ReactMarkdown>
+          {/* Content Wrapper to handle scroll independently */}
+          <div className="flex-1 flex flex-col h-full min-w-0">
+            
+            {/* Real-Time Emotion Timeline - Placed at the top of the chat */}
+            <EmotionTimeline 
+                messages={messages} 
+                isLoading={isLoading} 
+                onClick={() => setShowInsights(true)} 
+            />
 
-                  {/* Grounding Sources */}
-                  {msg.groundingChunks && msg.groundingChunks.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-slate-100/50">
-                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">
-                        <Globe size={10} /> Sources
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {msg.groundingChunks.map((chunk, idx) => (
-                          chunk.web?.uri ? (
-                            <a 
-                              key={idx} 
-                              href={chunk.web.uri} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className={`text-xs px-2 py-1 rounded border truncate max-w-[200px] transition-colors ${
-                                msg.role === 'user' 
-                                  ? 'bg-white/10 border-white/20 text-blue-100 hover:bg-white/20' 
-                                  : 'bg-slate-50 border-slate-200 text-blue-600 hover:bg-slate-100 hover:underline'
-                              }`}
-                            >
-                              {chunk.web.title || new URL(chunk.web.uri).hostname}
-                            </a>
-                          ) : null
-                        ))}
-                      </div>
+            {/* Messages Area */}
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-hide">
+                {messages.map((msg) => (
+                <div 
+                    key={msg.id} 
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                    <div 
+                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-4 shadow-sm text-sm sm:text-base leading-relaxed ${
+                        msg.role === 'user' 
+                        ? 'bg-blue-600 text-white rounded-br-none' 
+                        : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
+                    } ${msg.isThinking ? 'border-l-4 border-l-purple-400 bg-purple-50' : ''}`}
+                    >
+                    <ReactMarkdown 
+                        className={`markdown ${msg.role === 'user' ? 'prose-invert' : 'prose-slate'}`}
+                        components={{
+                            p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />
+                        }}
+                    >
+                        {msg.text}
+                    </ReactMarkdown>
+
+                    {/* Grounding Sources */}
+                    {msg.groundingChunks && msg.groundingChunks.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-slate-100/50">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">
+                            <Globe size={10} /> Sources
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            {msg.groundingChunks.map((chunk, idx) => (
+                            chunk.web?.uri ? (
+                                <a 
+                                key={idx} 
+                                href={chunk.web.uri} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className={`text-xs px-2 py-1 rounded border truncate max-w-[200px] transition-colors ${
+                                    msg.role === 'user' 
+                                    ? 'bg-white/10 border-white/20 text-blue-100 hover:bg-white/20' 
+                                    : 'bg-slate-50 border-slate-200 text-blue-600 hover:bg-slate-100 hover:underline'
+                                }`}
+                                >
+                                {chunk.web.title || new URL(chunk.web.uri).hostname}
+                                </a>
+                            ) : null
+                            ))}
+                        </div>
+                        </div>
+                    )}
                     </div>
-                  )}
                 </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none p-4 flex space-x-2 items-center">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-300"></div>
+                ))}
+                {isLoading && (
+                <div className="flex justify-start">
+                    <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none p-4 flex space-x-2 items-center">
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-300"></div>
+                    </div>
                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </main>
+                )}
+                <div ref={messagesEndRef} />
+            </main>
+          </div>
           
           {/* Insights Panel - Absolute on mobile, Sidebar on Desktop */}
           {showInsights && (
-             <div className="absolute bottom-0 left-0 right-0 sm:relative sm:w-80 sm:border-l sm:border-slate-100 bg-slate-50/50 backdrop-blur-sm sm:backdrop-blur-none sm:bg-slate-50 z-20 p-4 sm:p-0 flex flex-col justify-end sm:justify-start">
-                 <div className="sm:p-4">
+             <div className="absolute bottom-0 left-0 right-0 sm:relative sm:w-80 sm:border-l sm:border-slate-100 bg-slate-50/50 backdrop-blur-sm sm:backdrop-blur-none sm:bg-slate-50 z-20 p-4 sm:p-0 flex flex-col justify-end sm:justify-start h-full">
+                 <div className="sm:p-4 h-full overflow-y-auto">
                     <EmotionTrendChart messages={messages} onClose={() => setShowInsights(false)} />
                  </div>
              </div>
@@ -319,10 +396,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type how you're feeling..."
+                placeholder={isListening ? "Listening..." : "Type how you're feeling..."}
                 className="w-full bg-transparent border-none focus:ring-0 p-4 max-h-32 min-h-[56px] resize-none text-slate-700 placeholder:text-slate-400 text-base"
                 rows={1}
             />
+            
+            {/* Mic Button */}
+            {supportsSpeech && (
+                <button
+                    onClick={toggleListening}
+                    disabled={isLoading}
+                    className={`p-3 mb-1 rounded-xl transition-all ${
+                        isListening 
+                        ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse' 
+                        : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                    }`}
+                    title={isListening ? "Stop Listening" : "Start Dictation"}
+                >
+                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                </button>
+            )}
+
+            {/* Send Button */}
             <button
                 onClick={handleSendMessage}
                 disabled={!inputText.trim() || isLoading}

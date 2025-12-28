@@ -5,8 +5,8 @@ export interface EmotionData {
 }
 
 export interface GroundingWeb {
-  uri: string;
-  title: string;
+  uri?: string;
+  title?: string;
 }
 
 export interface GroundingChunk {

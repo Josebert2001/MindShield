@@ -1,4 +1,4 @@
-import { GoogleGenAI, Chat, GenerativeModel } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 import { SYSTEM_INSTRUCTION, GroundingChunk } from "../types";
 
 // Initialize the API client
@@ -8,10 +8,13 @@ let chatSession: Chat | null = null;
 
 const getClient = (): GoogleGenAI => {
   if (!aiClient) {
-    if (!process.env.API_KEY) {
-        throw new Error("API Key not found");
+    // Access API Key using process.env.API_KEY as per guidelines
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+        throw new Error("API_KEY not found. Please add it to your environment variables.");
     }
-    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    aiClient = new GoogleGenAI({ apiKey });
   }
   return aiClient;
 };
@@ -43,7 +46,7 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
     const response = await chatSession.sendMessage({ message });
     return {
         text: response.text || "",
-        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
+        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks as unknown as GroundingChunk[] | undefined
     };
   } catch (error) {
     console.error("Gemini Chat Error:", error);
@@ -76,5 +79,34 @@ export const generateDeepReflection = async (context: string): Promise<string> =
     console.error("Gemini Deep Reflection Error:", error);
     // Fallback if thinking model fails or is unavailable
     return "I'm having trouble reflecting deeply right now, but I am here to listen. Tell me more about how you feel.";
+  }
+};
+
+// Feature: Personalized Coping Strategy
+// Generates a quick, actionable micro-habit based on emotional history
+export const generateCopingStrategy = async (emotionHistory: string): Promise<string> => {
+  const client = getClient();
+  try {
+    const response = await client.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `
+        Act as an expert behavioral therapist. 
+        Based on the user's recent emotional trajectory (oldest to newest): "${emotionHistory}".
+
+        Recommend ONE specific, micro-habit or coping technique they can perform strictly within 2 minutes right now. 
+        
+        Guidelines:
+        - If they are angry: focus on physical regulation (clenching/unclenching, cold water).
+        - If they are anxious: focus on sensory grounding (5-4-3-2-1, texture touching).
+        - If they are sad: focus on self-soothing or gentle movement.
+        - If mixed/chaotic: focus on a single point of focus.
+
+        Output Style: Direct, warm, actionable. No preamble. Max 35 words.
+      `,
+    });
+    return response.text || "Try holding an ice cube in your hand until it melts to ground yourself.";
+  } catch (error) {
+    console.error("Coping Strategy Error:", error);
+    return "Take three slow, deep breaths, counting to 4 on the inhale and 6 on the exhale.";
   }
 };
