@@ -8,11 +8,12 @@ let chatSession: Chat | null = null;
 
 const getClient = (): GoogleGenAI => {
   if (!aiClient) {
-    // Access API Key using process.env.API_KEY as per guidelines
+    // Access API Key using process.env.API_KEY as strictly required by guidelines.
+    // We assume the variable is pre-configured and accessible.
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-        throw new Error("API_KEY not found. Please add it to your environment variables.");
+        throw new Error("API_KEY not found in environment variables.");
     }
     aiClient = new GoogleGenAI({ apiKey });
   }
@@ -46,7 +47,8 @@ export const sendMessageToGemini = async (message: string): Promise<{ text: stri
     const response = await chatSession.sendMessage({ message });
     return {
         text: response.text || "",
-        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks as unknown as GroundingChunk[] | undefined
+        // Structural typing allows assignment if shapes match
+        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] | undefined
     };
   } catch (error) {
     console.error("Gemini Chat Error:", error);
