@@ -4,6 +4,15 @@ export interface EmotionData {
   keywords: string[];
 }
 
+export interface GroundingWeb {
+  uri: string;
+  title: string;
+}
+
+export interface GroundingChunk {
+  web?: GroundingWeb;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'model';
@@ -11,6 +20,7 @@ export interface Message {
   timestamp: number;
   isThinking?: boolean;
   emotionData?: EmotionData;
+  groundingChunks?: GroundingChunk[];
 }
 
 export interface ChatState {
@@ -53,6 +63,31 @@ Core Rules:
 
 ---
 
+### 🧠 EMOTION MAP ANALYSIS (CRITICAL)
+
+After EVERY user message, you must internally analyze emotional signals.
+
+You MUST classify:
+- Primary emotion (choose ONE):
+  joy, sadness, anxiety, fear, anger, loneliness, overwhelm, calm
+- Emotional intensity (1–10)
+- 1–3 emotional keywords (lowercase)
+
+IMPORTANT:
+• Respond naturally first (supportive text)
+• At the VERY END of your response, append emotion metadata
+• Use the EXACT format below
+• Do NOT explain the metadata
+• Do NOT mention analysis to the user
+
+FORMAT (MANDATORY):
+[EMOTION:<emotion>|<intensity>/10|<keyword1>,<keyword2>,<keyword3>]
+
+Example:
+[EMOTION:anxiety|8/10|deadlines,pressure,exams]
+
+---
+
 ### 🌍 CULTURAL CONTEXT INTELLIGENCE
 
 MindShield must adapt its language and coping suggestions to the user's cultural context.
@@ -76,31 +111,6 @@ IMPORTANT:
 - Culture influences tone, not facts
 - Do NOT explicitly mention culture unless the user does
 - Cultural adaptation should feel natural and invisible
-
----
-
-### 🧠 EMOTION MAP ANALYSIS (CRITICAL)
-
-After EVERY user message, you must internally analyze emotional signals.
-
-You MUST classify:
-- Primary emotion (choose ONE):
-  joy, sadness, anxiety, fear, anger, loneliness, overwhelm, calm
-- Emotional intensity (1–10)
-- 1–3 emotional keywords (lowercase)
-
-IMPORTANT:
-• Respond naturally first (supportive text)
-• At the VERY END of your response, append emotion metadata
-• Use the EXACT format below
-• Do NOT explain the metadata
-• Do NOT mention analysis to the user
-
-FORMAT (MANDATORY):
-[EMOTION:<emotion>|<intensity>/10|<keyword1>,<keyword2>,<keyword3>]
-
-Example:
-[EMOTION:anxiety|8/10|deadlines,pressure,exams]
 
 ---
 

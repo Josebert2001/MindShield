@@ -1,5 +1,5 @@
 import { GoogleGenAI, Chat, GenerativeModel } from "@google/genai";
-import { SYSTEM_INSTRUCTION } from "../types";
+import { SYSTEM_INSTRUCTION, GroundingChunk } from "../types";
 
 // Initialize the API client
 // We create a factory or singleton to manage the instance
@@ -19,17 +19,18 @@ const getClient = (): GoogleGenAI => {
 // Initialize or reset the chat session
 export const initChatSession = async () => {
   const client = getClient();
-  // Using gemini-2.5-flash-lite-latest for fast, responsive standard chat
+  // Using gemini-3-flash-preview for reliable text chat and availability
   chatSession = client.chats.create({
-    model: 'gemini-2.5-flash-lite-latest',
+    model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       temperature: 0.7, // Slightly creative but balanced for empathy
+      tools: [{ googleSearch: {} }], // Enable Google Search grounding
     },
   });
 };
 
-export const sendMessageToGemini = async (message: string): Promise<string> => {
+export const sendMessageToGemini = async (message: string): Promise<{ text: string; groundingChunks?: GroundingChunk[] }> => {
   if (!chatSession) {
     await initChatSession();
   }
@@ -40,7 +41,10 @@ export const sendMessageToGemini = async (message: string): Promise<string> => {
 
   try {
     const response = await chatSession.sendMessage({ message });
-    return response.text || "";
+    return {
+        text: response.text || "",
+        groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks
+    };
   } catch (error) {
     console.error("Gemini Chat Error:", error);
     throw error;

@@ -15,17 +15,21 @@ Many individuals experience emotional distress but avoid seeking help due to sti
 ### 1. 💬 Text-Based Emotional Support
 *   **Natural Conversation:** Uses advanced AI to provide calm, empathetic, and non-judgmental responses.
 *   **Privacy-First:** No login required. No chat history is stored on servers. Once the session ends, the data is gone.
-*   **Model:** Powered by `gemini-2.5-flash-lite-latest` for fast, responsive interaction.
+*   **Model:** Powered by `gemini-3-flash-preview` for fast, responsive interaction.
 
 ### 2. 🧠 Deep Reflection Mode
 *   **Advanced Reasoning:** Users can request a "Deep Reflection" where the AI analyzes the conversation context to identify underlying emotions and patterns.
 *   **Thinking Capability:** Utilizes `gemini-3-pro-preview` with a dedicated **Thinking Budget** to generate profound, personalized insights rather than generic advice.
 
-### 3. 🌬️ Grounding Tools
-*   **Interactive Breathing Exercise:** A built-in "Box Breathing" tool (4-4-4-4 technique) to help users physically calm their nervous system during moments of high anxiety.
-*   **Visual Guidance:** soothing animations to guide the breathing rhythm.
+### 3. 🔍 Search Grounding
+*   **Real-Time Information:** When relevant, the AI can securely search the web using Google Search to provide up-to-date information on mental health resources, coping techniques, or scientific concepts.
+*   **Transparent Sources:** Citations and source links are displayed directly in the chat to ensure trust and transparency.
 
-### 4. 🚨 Distress Detection & Safety
+### 4. 🌬️ Grounding Tools
+*   **Interactive Breathing Exercise:** A built-in "Box Breathing" tool (4-4-4-4 technique) to help users physically calm their nervous system during moments of high anxiety.
+*   **Visual Guidance:** Soothing animations to guide the breathing rhythm.
+
+### 5. 🚨 Distress Detection & Safety
 *   **Guardrails:** The AI is trained to detect signs of self-harm or extreme distress.
 *   **Crisis Handling:** Responds with empathy and encourages real-world professional help without being alarmist.
 *   **Disclaimer:** MindShield clearly states it is not a replacement for professional therapy or medical treatment.
@@ -42,7 +46,7 @@ MindShield is built as a lightweight, responsive web application.
 
 | Feature | Model | Reasoning |
 | :--- | :--- | :--- |
-| **Main Chat** | `gemini-2.5-flash-lite-latest` | Fast latency, cost-effective, excellent natural language handling. |
+| **Main Chat & Search** | `gemini-3-flash-preview` | Fast latency, high availability. Equipped with `googleSearch` tool for grounding responses in real-world data. |
 | **Deep Reflection** | `gemini-3-pro-preview` | High reasoning capability. Configured with `thinkingConfig` to allow "thought" before answering complex emotional queries. |
 
 ## 🚀 Getting Started

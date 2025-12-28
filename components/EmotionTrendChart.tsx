@@ -1,7 +1,7 @@
 import React from 'react';
 import { Message } from '../types';
 import { emotionColors } from '../utils/emotionParser';
-import { TrendingUp, Activity } from 'lucide-react';
+import { TrendingUp, Activity, Lightbulb } from 'lucide-react';
 
 interface EmotionTrendChartProps {
   messages: Message[];
@@ -54,7 +54,18 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
 
   // Get current state
   const current = dataPoints[dataPoints.length - 1];
-  const avgIntensity = (dataPoints.reduce((acc, curr) => acc + curr.intensity, 0) / dataPoints.length).toFixed(1);
+  const avgIntensity = (dataPoints.reduce((acc, curr) => acc + curr.intensity, 0) / dataPoints.length);
+  const avgDisplay = avgIntensity.toFixed(1);
+
+  // Insight Overlay Logic
+  const generateInsight = (avg: number) => {
+    if (dataPoints.length < 3) return "Gathering more data for insights...";
+    if (avg >= 7) return "High emotional load detected over time.";
+    if (avg <= 3) return "Emotional state appears relatively stable.";
+    return "Emotional patterns are fluctuating.";
+  };
+
+  const insightText = generateInsight(avgIntensity);
 
   return (
     <div className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-xl shadow-blue-500/5 animate-in slide-in-from-bottom-4">
@@ -87,6 +98,8 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
                     stroke="#e2e8f0" 
                     strokeWidth="2" 
                     points={points} 
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
                 />
                 
                 {/* Data Points */}
@@ -135,9 +148,19 @@ const EmotionTrendChart: React.FC<EmotionTrendChartProps> = ({ messages, onClose
             </div>
         </div>
 
+        {/* AI Insight Overlay */}
+        {dataPoints.length >= 3 && (
+            <div className="mt-4 bg-blue-50/50 rounded-lg p-3 flex items-start gap-3 border border-blue-100">
+                <Lightbulb size={16} className="text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-800 font-medium leading-relaxed">
+                    {insightText}
+                </p>
+            </div>
+        )}
+
         {/* Summary */}
         <div className="mt-4 pt-4 border-t border-slate-50 flex justify-between items-center text-xs">
-            <span className="text-slate-400">Average Intensity: <strong className="text-slate-700">{avgIntensity}/10</strong></span>
+            <span className="text-slate-400">Average Intensity: <strong className="text-slate-700">{avgDisplay}/10</strong></span>
             <span className="text-slate-400">Sessions: <strong className="text-slate-700">{dataPoints.length}</strong></span>
         </div>
     </div>

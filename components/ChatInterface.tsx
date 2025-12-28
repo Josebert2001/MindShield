@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock, Globe } from 'lucide-react';
 import { Message } from '../types';
 import { sendMessageToGemini, generateDeepReflection, initChatSession } from '../services/geminiService';
 import { parseEmotionMetadata, cleanAIText } from '../utils/emotionParser';
 import EmotionTrendChart from './EmotionTrendChart';
+import Logo from './Logo';
 import ReactMarkdown from 'react-markdown';
 
 interface ChatInterfaceProps {
@@ -73,7 +74,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
     setIsLoading(true);
 
     try {
-      const rawResponse = await sendMessageToGemini(userMsg.text);
+      const { text: rawResponse, groundingChunks } = await sendMessageToGemini(userMsg.text);
       
       // Parse Logic
       const emotionData = parseEmotionMetadata(rawResponse);
@@ -84,7 +85,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
         role: 'model',
         text: cleanText,
         timestamp: Date.now(),
-        emotionData: emotionData
+        emotionData: emotionData,
+        groundingChunks: groundingChunks
       };
       
       setMessages(prev => [...prev, botMsg]);
@@ -151,11 +153,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
     <div className="flex flex-col h-screen bg-slate-50 relative">
       {/* Header */}
       <header className="bg-white border-b border-slate-100 p-4 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center space-x-2">
-          <div className="bg-slate-900 text-white p-1.5 rounded-lg">
-             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div className="flex items-center space-x-2.5">
+          <div className="bg-slate-900 text-white p-1.5 rounded-lg flex items-center justify-center">
+             <Logo className="w-5 h-5" variant="white" />
           </div>
-          <span className="font-semibold text-slate-800 hidden sm:inline">MindShield</span>
+          <span className="font-semibold text-slate-800 hidden sm:inline tracking-tight">MindShield</span>
         </div>
         
         <div className="flex items-center space-x-2 sm:space-x-3">
@@ -228,6 +230,34 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
                   >
                     {msg.text}
                   </ReactMarkdown>
+
+                  {/* Grounding Sources */}
+                  {msg.groundingChunks && msg.groundingChunks.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-slate-100/50">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 flex items-center gap-1">
+                        <Globe size={10} /> Sources
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.groundingChunks.map((chunk, idx) => (
+                          chunk.web?.uri ? (
+                            <a 
+                              key={idx} 
+                              href={chunk.web.uri} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className={`text-xs px-2 py-1 rounded border truncate max-w-[200px] transition-colors ${
+                                msg.role === 'user' 
+                                  ? 'bg-white/10 border-white/20 text-blue-100 hover:bg-white/20' 
+                                  : 'bg-slate-50 border-slate-200 text-blue-600 hover:bg-slate-100 hover:underline'
+                              }`}
+                            >
+                              {chunk.web.title || new URL(chunk.web.uri).hostname}
+                            </a>
+                          ) : null
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
