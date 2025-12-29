@@ -1,9 +1,6 @@
 import { GoogleGenAI, Chat } from "@google/genai";
 import { SYSTEM_INSTRUCTION, GroundingChunk } from "../types";
 
-// Ensure process.env is typed for TS to avoid "Cannot find name 'process'" error
-declare const process: { env: { API_KEY: string | undefined } };
-
 // Initialize the API client
 // We create a factory or singleton to manage the instance
 let aiClient: GoogleGenAI | null = null;
@@ -11,14 +8,9 @@ let chatSession: Chat | null = null;
 
 const getClient = (): GoogleGenAI => {
   if (!aiClient) {
-    // Guideline: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
-    // Guideline: Assume this variable is pre-configured, valid, and accessible.
-    const apiKey = process.env.API_KEY;
-    
-    // We assume the key is present as per guidelines.
-    // However, providing a fallback empty string prevents runtime crash on init if missing,
-    // though the API calls would fail.
-    aiClient = new GoogleGenAI({ apiKey: apiKey || "" });
+    // The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    // Assume this variable is pre-configured, valid, and accessible.
+    aiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
   return aiClient;
 };
