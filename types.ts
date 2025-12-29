@@ -21,6 +21,7 @@ export interface Message {
   isThinking?: boolean;
   emotionData?: EmotionData;
   groundingChunks?: GroundingChunk[];
+  imageUrl?: string;
 }
 
 export interface ChatState {

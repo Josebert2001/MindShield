@@ -1,17 +1,2 @@
-// Fix: Removed missing vite/client reference
-// /// <reference types="vite/client" />
-
-declare var process: {
-  env: {
-    API_KEY: string;
-    [key: string]: any;
-  }
-};
-
-interface ImportMetaEnv {
-  readonly VITE_GEMINI_API_KEY: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+// This file is kept to satisfy build tools but content is removed to fix type errors.
+// API Key is accessed via process.env.API_KEY per guidelines.

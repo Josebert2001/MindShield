@@ -1,6 +1,9 @@
 import { GoogleGenAI, Chat } from "@google/genai";
 import { SYSTEM_INSTRUCTION, GroundingChunk } from "../types";
 
+// Ensure process.env is typed for TS to avoid "Cannot find name 'process'" error
+declare const process: { env: { API_KEY: string | undefined } };
+
 // Initialize the API client
 // We create a factory or singleton to manage the instance
 let aiClient: GoogleGenAI | null = null;
@@ -8,14 +11,14 @@ let chatSession: Chat | null = null;
 
 const getClient = (): GoogleGenAI => {
   if (!aiClient) {
-    // Access API Key using process.env.API_KEY as strictly required by guidelines.
-    // We assume the variable is pre-configured and accessible.
+    // Guideline: The API key must be obtained exclusively from the environment variable process.env.API_KEY.
+    // Guideline: Assume this variable is pre-configured, valid, and accessible.
     const apiKey = process.env.API_KEY;
     
-    if (!apiKey) {
-        throw new Error("API_KEY not found in environment variables.");
-    }
-    aiClient = new GoogleGenAI({ apiKey });
+    // We assume the key is present as per guidelines.
+    // However, providing a fallback empty string prevents runtime crash on init if missing,
+    // though the API calls would fail.
+    aiClient = new GoogleGenAI({ apiKey: apiKey || "" });
   }
   return aiClient;
 };
@@ -73,7 +76,7 @@ export const generateDeepReflection = async (context: string): Promise<string> =
         Context: "${context}"
       `,
       config: {
-        thinkingConfig: { thinkingBudget: 1024 }, // Allocate thinking tokens for better reasoning
+        thinkingConfig: { thinkingBudget: 32768 }, // Updated to max budget for gemini-3-pro
       }
     });
     return response.text || "I'm here for you. Take a deep breath.";
@@ -111,4 +114,55 @@ export const generateCopingStrategy = async (emotionHistory: string): Promise<st
     console.error("Coping Strategy Error:", error);
     return "Take three slow, deep breaths, counting to 4 on the inhale and 6 on the exhale.";
   }
+};
+
+// Feature: Generate Images
+// Uses gemini-3-pro-image-preview to generate visualizations
+export const generateImage = async (prompt: string, size: '1K' | '2K' | '4K'): Promise<string> => {
+    const client = getClient();
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-3-pro-image-preview',
+            contents: {
+                parts: [{ text: `Generate a calming, therapeutic image representing: ${prompt}` }]
+            },
+            config: {
+                imageConfig: {
+                    imageSize: size,
+                    aspectRatio: "1:1"
+                }
+            }
+        });
+        
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+            if (part.inlineData) {
+                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            }
+        }
+        throw new Error("No image data received.");
+    } catch (error) {
+        console.error("Image Generation Error:", error);
+        throw error;
+    }
+};
+
+// Feature: Transcribe Audio
+// Uses gemini-3-flash-preview to transcribe audio input
+export const transcribeAudio = async (base64Audio: string, mimeType: string): Promise<string> => {
+    const client = getClient();
+    try {
+        const response = await client.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: {
+                parts: [
+                    { inlineData: { mimeType, data: base64Audio } },
+                    { text: "Transcribe the spoken audio into text exactly as spoken. Do not add any descriptions or commentary." }
+                ]
+            }
+        });
+        return response.text || "";
+    } catch (error) {
+        console.error("Transcription Error:", error);
+        throw error;
+    }
 };

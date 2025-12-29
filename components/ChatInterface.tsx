@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock, Globe, Mic, MicOff } from 'lucide-react';
+import { Send, Sparkles, RefreshCw, Wind, Shield, BarChart2, Clock, Globe, Mic, MicOff, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Message } from '../types';
-import { sendMessageToGemini, generateDeepReflection, initChatSession } from '../services/geminiService';
+import { sendMessageToGemini, generateDeepReflection, initChatSession, generateImage, transcribeAudio } from '../services/geminiService';
 import { parseEmotionMetadata, cleanAIText } from '../utils/emotionParser';
 import EmotionTrendChart from './EmotionTrendChart';
 import EmotionTimeline from './EmotionTimeline';
@@ -21,24 +21,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
   const [showInsights, setShowInsights] = useState(false);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [isListening, setIsListening] = useState(false);
-  const [supportsSpeech, setSupportsSpeech] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [showImageOptions, setShowImageOptions] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
     // Init session on mount
     initChatSession();
     
-    // Check for SpeechRecognition support
-    if (typeof window !== 'undefined') {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            setSupportsSpeech(true);
-        }
-    }
-
     // Add welcome message
     setMessages([
       {
@@ -71,61 +66,121 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isListening) {
-        recognitionRef.current?.stop();
-        setIsListening(false);
-        return;
+      stopListening();
+    } else {
+      startListening();
     }
+  };
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+  const startListening = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    recognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                finalTranscript += event.results[i][0].transcript;
-            } else {
-                interimTranscript += event.results[i][0].transcript;
-            }
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        setIsTranscribing(true);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         
-        if (finalTranscript) {
-            setInputText(prev => {
+        // Convert Blob to Base64
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64String = reader.result as string;
+          // Extract the base64 part (remove "data:audio/webm;base64,")
+          const base64Audio = base64String.split(',')[1];
+          const mimeType = base64String.split(',')[0].split(':')[1].split(';')[0];
+
+          try {
+            const transcript = await transcribeAudio(base64Audio, mimeType);
+            if (transcript) {
+              setInputText(prev => {
                 const needsSpace = prev.length > 0 && !prev.endsWith(' ');
-                return prev + (needsSpace ? ' ' : '') + finalTranscript;
-            });
-        }
-    };
+                return prev + (needsSpace ? ' ' : '') + transcript;
+              });
+            }
+          } catch (error) {
+            console.error("Transcription failed", error);
+            // Fallback or error notification could go here
+          } finally {
+            setIsTranscribing(false);
+            // Stop all tracks to release microphone
+            stream.getTracks().forEach(track => track.stop());
+          }
+        };
+      };
 
-    recognition.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        setIsListening(false);
-    };
+      mediaRecorderRef.current.start();
+      setIsListening(true);
+    } catch (error) {
+      console.error("Error accessing microphone:", error);
+    }
+  };
 
-    recognition.onend = () => {
-        setIsListening(false);
-    };
+  const stopListening = () => {
+    if (mediaRecorderRef.current && isListening) {
+      mediaRecorderRef.current.stop();
+      setIsListening(false);
+    }
+  };
 
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
+  const handleImageGeneration = async (size: '1K' | '2K' | '4K') => {
+      setShowImageOptions(false);
+      const prompt = inputText.trim();
+      if (!prompt) return;
+
+      setIsGeneratingImage(true);
+      // Clear input
+      setInputText('');
+
+      // Add user message indicating request
+      const userMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        text: `Visualize: ${prompt} (${size})`,
+        timestamp: Date.now()
+      };
+      setMessages(prev => [...prev, userMsg]);
+
+      try {
+        const imageData = await generateImage(prompt, size);
+        
+        const botMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            text: `Here is a visualization for "${prompt}".`,
+            timestamp: Date.now(),
+            imageUrl: imageData
+        };
+        setMessages(prev => [...prev, botMsg]);
+
+      } catch (error) {
+        console.error(error);
+        const errorMsg: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'model',
+            text: "I couldn't generate the image at this time. Please try again.",
+            timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      } finally {
+        setIsGeneratingImage(false);
+      }
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
 
     if (isListening) {
-        recognitionRef.current?.stop();
-        setIsListening(false);
+        stopListening();
     }
 
     const userMsg: Message = {
@@ -298,6 +353,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
                         : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
                     } ${msg.isThinking ? 'border-l-4 border-l-purple-400 bg-purple-50' : ''}`}
                     >
+                    {/* Render Image if available */}
+                    {msg.imageUrl && (
+                        <div className="mb-4 rounded-lg overflow-hidden border border-white/20">
+                            <img src={msg.imageUrl} alt="Generated visualization" className="w-full h-auto" />
+                        </div>
+                    )}
+
                     <ReactMarkdown 
                         className={`markdown ${msg.role === 'user' ? 'prose-invert' : 'prose-slate'}`}
                         components={{
@@ -337,12 +399,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
                     </div>
                 </div>
                 ))}
-                {isLoading && (
+                {(isLoading || isGeneratingImage) && (
                 <div className="flex justify-start">
                     <div className="bg-white border border-slate-100 rounded-2xl rounded-bl-none p-4 flex space-x-2 items-center">
                         <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></div>
                         <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></div>
                         <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-300"></div>
+                        {isGeneratingImage && <span className="ml-2 text-xs text-slate-400">Visualizing...</span>}
                     </div>
                 </div>
                 )}
@@ -391,40 +454,73 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onExit, onOpenBreathing }
             )}
 
             <div className="relative flex items-end bg-slate-50 border border-slate-200 rounded-2xl focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all">
+            
+            {/* Image Generation Popover */}
+            {showImageOptions && (
+              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-100 p-2 animate-in fade-in slide-in-from-bottom-2 z-50 min-w-[180px]">
+                <p className="text-xs font-semibold text-slate-400 px-2 py-1 mb-1 uppercase tracking-wider">Image Size</p>
+                <button onClick={() => handleImageGeneration('1K')} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">1K (Standard)</button>
+                <button onClick={() => handleImageGeneration('2K')} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">2K (High Res)</button>
+                <button onClick={() => handleImageGeneration('4K')} className="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">4K (Ultra HD)</button>
+              </div>
+            )}
+
             <textarea
                 ref={inputRef}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={isListening ? "Listening..." : "Type how you're feeling..."}
+                placeholder={isListening ? "Listening..." : isTranscribing ? "Transcribing..." : "Type how you're feeling..."}
                 className="w-full bg-transparent border-none focus:ring-0 p-4 max-h-32 min-h-[56px] resize-none text-slate-700 placeholder:text-slate-400 text-base"
                 rows={1}
             />
             
-            {/* Mic Button */}
-            {supportsSpeech && (
+            <div className="flex items-center pb-2 pr-2 gap-1">
+                 {/* Image Gen Button */}
+                 <button
+                    onClick={() => {
+                        if (inputText.trim()) {
+                            setShowImageOptions(!showImageOptions);
+                        } else {
+                            alert("Please describe what you want to visualize first.");
+                        }
+                    }}
+                    disabled={isLoading || isGeneratingImage}
+                    className={`p-2 rounded-xl transition-all ${
+                        showImageOptions 
+                        ? 'bg-blue-100 text-blue-600' 
+                        : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                    }`}
+                    title="Visualize Safe Place"
+                >
+                    <ImageIcon size={20} />
+                </button>
+
+                {/* Mic Button */}
                 <button
                     onClick={toggleListening}
-                    disabled={isLoading}
-                    className={`p-3 mb-1 rounded-xl transition-all ${
+                    disabled={isLoading || isTranscribing}
+                    className={`p-2 rounded-xl transition-all ${
                         isListening 
-                        ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse' 
+                        ? 'text-red-500 bg-red-50 hover:bg-red-100 animate-pulse ring-2 ring-red-200' 
+                        : isTranscribing 
+                        ? 'text-blue-500 bg-blue-50'
                         : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
                     }`}
                     title={isListening ? "Stop Listening" : "Start Dictation"}
                 >
-                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                    {isTranscribing ? <Loader2 size={20} className="animate-spin" /> : isListening ? <MicOff size={20} /> : <Mic size={20} />}
                 </button>
-            )}
 
-            {/* Send Button */}
-            <button
-                onClick={handleSendMessage}
-                disabled={!inputText.trim() || isLoading}
-                className="p-3 mr-1 mb-1 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-                <Send size={20} />
-            </button>
+                {/* Send Button */}
+                <button
+                    onClick={handleSendMessage}
+                    disabled={!inputText.trim() || isLoading}
+                    className="p-2 ml-1 text-blue-600 hover:bg-blue-100 rounded-xl transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                    <Send size={20} />
+                </button>
+            </div>
             </div>
             
             <div className="text-center">
